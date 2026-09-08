@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_TARBALL="https://github.com/eonvoid5/voidhost/archive/refs/heads/main.tar.gz"
 APP_DIR="/var/www/voidhost"
-PORT="8080"
+PORT="6565"
 PIDFILE="/tmp/voidhost.pid"
 
 if [ "$(id -u)" -ne 0 ]; then
