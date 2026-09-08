@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_TARBALL="https://github.com/eonvoid5/voidhost/archive/refs/heads/main.tar.gz"
 APP_DIR="/var/www/voidhost"
 PORT="8080"
-SERVICE="voidhost"
+PIDFILE="/tmp/voidhost.pid"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run: sudo bash install.sh"
@@ -21,40 +21,29 @@ echo "[2/4] Downloading VOID HOSTING..."
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR"
 curl -fsSL "$REPO_TARBALL" | tar -xz --strip-components=1 -C "$APP_DIR"
-chown -R root:root "$APP_DIR"
 
-# Use Python's static web server directly so existing/restricted Nginx
-# configurations cannot break the installer. The site is exposed on 8080.
-cat > "/etc/systemd/system/${SERVICE}.service" <<EOF
-[Unit]
-Description=VOID HOSTING Website
-After=network-online.target
-Wants=network-online.target
+# Stop a previous VOID HOSTING process without requiring systemd.
+if [ -f "$PIDFILE" ]; then
+  OLD_PID="$(cat "$PIDFILE" 2>/dev/null || true)"
+  [ -n "$OLD_PID" ] && kill "$OLD_PID" 2>/dev/null || true
+  rm -f "$PIDFILE"
+fi
+pkill -f "python3 -m http.server $PORT --bind" 2>/dev/null || true
 
-[Service]
-Type=simple
-WorkingDirectory=$APP_DIR
-ExecStart=/usr/bin/python3 -m http.server $PORT --bind 0.0.0.0
-Restart=always
-RestartSec=2
+# Containers such as GitHub Codespaces do not run systemd. Start the static
+# server directly in the background so the installer works there and on VPSes.
+nohup python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$APP_DIR" >/tmp/voidhost.log 2>&1 &
+PID=$!
+echo "$PID" > "$PIDFILE"
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable "$SERVICE"
-systemctl restart "$SERVICE"
-
-# Verify that the website process is actually listening before declaring success.
 sleep 1
-if ! ss -ltn 2>/dev/null | grep -q ":$PORT "; then
+echo "[3/4] Starting VOID HOSTING..."
+if ! kill -0 "$PID" 2>/dev/null || ! ss -ltn 2>/dev/null | grep -q ":$PORT "; then
   echo "ERROR: VOID HOSTING failed to start on port $PORT"
-  systemctl status "$SERVICE" --no-pager || true
+  cat /tmp/voidhost.log 2>/dev/null || true
   exit 1
 fi
 
-echo "[3/4] Starting VOID HOSTING..."
 echo "[4/4] Installation complete!"
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
@@ -65,5 +54,4 @@ echo "========================================"
 echo "Website: http://${IP:-YOUR_VPS_IP}:$PORT"
 echo "Files:   $APP_DIR"
 echo "Port:    $PORT"
-echo "Service: $SERVICE"
 echo "========================================"
