@@ -39,6 +39,7 @@ x-common:
     MYSQL_PASSWORD: "CHANGE_ME"
     MYSQL_ROOT_PASSWORD: "CHANGE_ME_TOO"
   panel: &panel-environment
+    APP_NAME: "VOIDHOST"
     APP_URL: "https://voidhost.example.com"
     APP_TIMEZONE: "UTC"
     APP_SERVICE_AUTHOR: "noreply@voidhost.example.com"
